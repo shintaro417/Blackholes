@@ -21,7 +21,10 @@ class MainActivity : AppCompatActivity(),SensorEventListener,SurfaceHolder.Callb
     private val tag = "Black holes"
     //
     private val matrixSize = 16
+    private val numOfBlackHole = 5 //出現させるブラックホール数 後から追加
     private val radius = 30f //ボールの半径
+    private val limitOfBlackHole = 100 // ブラックホールがサーフェスの端に出ないようにする。　後から追加
+
     private var mgValues = FloatArray(3) //配列　センサの値
     private var acValues = FloatArray(3) //配列　センサの値
     private var startTime:Long = 0 //開始時間
@@ -30,6 +33,9 @@ class MainActivity : AppCompatActivity(),SensorEventListener,SurfaceHolder.Callb
     private var ballX = 0f //ボールを出現させるx座標
     private var ballY = 0f //ボールを出現させるy座標
     private var isGoal = false
+    private var isGone = false //ブラックホールにボールが飲み込まれたかどうか判定する。　後から追加
+
+    private val blackHoleList = ArrayList<BlackHole>() //BlackHoleインスタンスをnumOfBlackHoleの数だけ入れる
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var sensorManager:SensorManager
@@ -73,7 +79,7 @@ class MainActivity : AppCompatActivity(),SensorEventListener,SurfaceHolder.Callb
         val roll = rad2Deg(orValues[2])
         Log.v(tag,"pitch${pitch}")
         Log.v(tag,"roll${roll}")
-        if(!isGoal){
+        if(!isGoal && !isGone){// isGoal = falseかつisGone = falseの時だけ呼び出す(second commit)
             drawGameBoard(pitch,roll)
         }
     }
@@ -98,20 +104,44 @@ class MainActivity : AppCompatActivity(),SensorEventListener,SurfaceHolder.Callb
         }else if(ballY + radius > surfaceHeight){
             ballY = surfaceHeight - radius //下限を設定する
         }
+        //飲み込まれたか(second commit)
+        for(bh in blackHoleList){
+            if(checkGone(bh.x,bh.y,bh.r)){
+                isGone = true
+            }
+        }
 
         //実際の描画処理(ダブルバッファリングを使う)描画時のちらつきを抑える。
         val canvas = binding.surfaceView.holder.lockCanvas() //surfaceの表示をロックしてCanvasオブジェクトを返す
         val paint = Paint() //Paintインスタンスの生成
-        paint.color = Color.YELLOW
         canvas.drawColor(Color.BLUE) //背景を塗る
-        canvas.drawCircle(ballX,ballY,radius,paint)  //円がを描画する。中心点の座標と半径を指定する
-
+        //ここからsecond commit ブラックホールの描画
+        paint.color = Color.BLACK
+        for(bh in blackHoleList){ //ブラックホールの数だけ描画
+            canvas.drawCircle(bh.x,bh.y,bh.r,paint)
+            bh.grow()
+        }//ここまでsecond commit
+        paint.color = Color.YELLOW
+        if(!isGone){//second commit isGoneがfalseの時だけボールを描画する
+            canvas.drawCircle(ballX,ballY,radius,paint)  //円がを描画する。中心点の座標と半径を指定する
+        }
         //
         if(isGoal){
             paint.textSize = 80f //フォントサイズの指定
             canvas.drawText(goaled(),10f,(surfaceHeight - 60).toFloat(),paint) //座標を指定して、goaled()の戻り値を描画する
         }
         binding.surfaceView.holder.unlockCanvasAndPost(canvas) //SurfaceViewを更新する。lockCanvasとセットで実行する
+    }
+
+    /**
+     * ボールがブラックホールに飲み込まれたか否かを判定する。(second commit)
+     * @param x0 ブラックホールのx座標
+     * @param y0 ブラックホールのy座標
+     * @param r ブラックホールの半径
+     */
+    private fun checkGone(x0:Float,y0:Float,r:Float):Boolean{
+        //ボールの中心座標がx0,y0を中心座標とする半径rに内包されているかが判定。
+        return (x0 - ballX) * (x0 - ballX) + (y0 - ballY) * (y0 - ballY) < r * r
     }
 
     /**
@@ -166,6 +196,26 @@ class MainActivity : AppCompatActivity(),SensorEventListener,SurfaceHolder.Callb
         ballY = (height - radius).toFloat()
         //開始時間を記録(1970年1月1日からの経過時間をミリ秒表記)
         startTime = System.currentTimeMillis()
+        bornBlackHoles() //後から追記(second commit)
+    }
+
+    /**
+     * BlackHoleインスタンスを生成してblackHoleListに追加する。
+     * 後から追記(seccond commit)
+     */
+    private fun bornBlackHoles(){
+        //numOfBlackHoleの数だけブラックホールを生成する。
+        for(i in 1..numOfBlackHole){
+            //x,y座標は乱数を使って値を指定する。
+            //開始値はlimitOfBlackHoleに指定して、x軸の場合はsurfaceWith - limitOfBlackHoleを終了値に設定
+            val x:Float = (limitOfBlackHole..surfaceWidth - limitOfBlackHole).random().toFloat()
+            //終了値はsurfaceHeight - limitOfBlackHoleに設定する。->ブラックホールが画面の端に出ないようにする。
+            val y:Float = (limitOfBlackHole..surfaceHeight - limitOfBlackHole).random().toFloat()
+            //speedも乱数生成する。
+            val speed :Int = (2..11).random()
+            val bh = BlackHole(x,y,speed)
+            blackHoleList.add(bh)
+        }
     }
 
     /**
